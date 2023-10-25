@@ -1,135 +1,153 @@
+-- Import the Ada.Text_IO and Ada.Containers.Vectors packages
 with Ada.Text_IO; use Ada.Text_IO;
-with Ada.Numerics.Float_Random; use Ada.Numerics.Float_Random;
+with Ada.Containers.Vectors; use Ada.Containers;
 
+-- Define the Main procedure
 procedure Main is
-    type Position is record
-        X : Integer;
-        Y : Integer;
-    end record;
+   -- Define a record type for a traveler
+   type Position is array(1..2) of Integer;
 
-    type Traveler is record
-        ID : Integer;
-        Pos : Position;
-    end record;
+   type Traveler is record
+      ID: Integer;
+      Pos: Position;
+   end record;
 
-    type Grid is array (1 .. 10, 1 .. 10) of Integer;
+   -- Define a record type for a grid
+   type GridMap is array(1..10, 1..10) of Integer;
 
-    Travelers : array (1 .. 5) of Traveler;
-    G : Grid := (others => (others => 0));
+   type Grid is record
+      Width, Height: Integer;
+      Travelers: Vector(Positive range <>) of Traveler;
+      GridMap: GridMap;
+      visitedEdges: Map(array(1..2) of Integer, Vector(1..4) of Boolean);
+      mu: System.Task_Primitives.Mutex;
+   end record;
 
-    Gen : Ada.Numerics.Float_Random.Generator;
+   -- Define a procedure to move a traveler
+   procedure MoveTraveler(g: access Grid; t: access Traveler) is
+      -- Define an array of possible moves
+      moves: array(1..4, 1..2) of Integer := ((-1, 0), (1, 0), (0, -1), (0, 1));
+      -- Choose a random move direction
+      moveDir: Integer := Integer(Rand(1, 4));
+      -- Get the move vector for the chosen direction
+      move: array(1..2) of Integer := moves(moveDir);
+      -- Calculate the new position of the traveler
+      newPos: array(1..2) of Integer := (t.Pos(1) + move(1), t.Pos(2) + move(2));
+      begin
+         g.mu.Lock;
+         if newPos(1) >= 1 and newPos(1) <= g.Width and newPos(2) >= 1 and newPos(2) <= g.Height and g.GridMap(newPos(1), newPos(2)) = 0 then
+            g.GridMap(t.Pos(1), t.Pos(2)) := 0;
+            g.GridMap(newPos(1), newPos(2)) := t.ID;
+            t.Pos := newPos;
+            temp := g.visitedEdges.Find(t.Pos);
+            temp(moveDir) := True;
+            g.visitedEdges.Replace(t.Pos, temp);
+         end if;
+         g.mu.Unlock;
+      end MoveTraveler;
 
-    procedure Add_Traveler(T : Traveler) is
-    begin
-        if G(T.Pos.X, T.Pos.Y) = 0 then
-            G(T.Pos.X, T.Pos.Y) := T.ID;
-        else
-            Put_Line("Position is already occupied");
-        end if;
-    end Add_Traveler;
-
-    procedure Move_Traveler(T : in out Traveler) is
-        DX : constant array (1 .. 4) of Integer := (1, -1, 0, 0);
-        DY : constant array (1 .. 4) of Integer := (0, 0, 1, -1);
-        Dir : Integer;
-        New_Pos : Position;
-    begin
-        Dir := Integer(Random(Gen) * 3.0) + 1;
-        if T.Pos.X + DX(Dir) in G'Range(1) and then T.Pos.Y + DY(Dir) in G'Range(2) and then G(T.Pos.X + DX(Dir), T.Pos.Y + DY(Dir)) = 0 then
-            New_Pos := (X => T.Pos.X + DX(Dir), Y => T.Pos.Y + DY(Dir));
-            G(T.Pos.X, T.Pos.Y) := 0;
-            G(New_Pos.X, New_Pos.Y) := T.ID;
-            T.Pos := New_Pos;
-        end if;
-    end Move_Traveler;
-
-    procedure Take_Photo is
-    begin
-        for I in G'Range(1) loop
-            for J in G'Range(2) loop
-                Put(Integer'Image(G(I, J)) & " ");
-            end loop;
-            New_Line;
-        end loop;
-    end Take_Photo;
-
-    protected type Task_Counter is
-   procedure Increment;
-   procedure Decrement;
-   entry Wait_Until_Zero;
-private
-   Count : Natural := 0;
-end Task_Counter;
-
-protected body Task_Counter is
-   procedure Increment is
+   -- Define a procedure to add a traveler to the grid
+   procedure AddTraveler(g: access Grid) is
+      i: Integer := g.Travelers.Length + 1;
+      pos: array(1..2) of Integer := (Integer(Rand(1, g.Width)), Integer(Rand(1, g.Height)));
+      t: Traveler := (ID => i, Pos => pos);
    begin
-      Count := Count + 1;
-   end Increment;
+      loop
+         g.mu.Lock;
+         if g.GridMap(pos(1), pos(2)) = 0 then
+            g.GridMap(t.Pos(1), t.Pos(2)) := t.ID;
+            g.Travelers.Append(t);
+            g.mu.Unlock;
+            declare
+               task Move_Traveler_Task is
+                  pragma Task_Storage_Size(0);
+               begin
+                  loop
+                     delay 1.0;
+                     MoveTraveler(g'Access, t'Access);
+                  end loop;
+               end Move_Traveler_Task;
+            begin
+               null;
+            end;
+            exit;
+         else
+            g.mu.Unlock;
+         end if;
+      end loop;
+   end AddTraveler;
 
-   procedure Decrement is
+   -- Define a procedure to take a photo of the grid
+   procedure TakePhoto(g: access Grid) is
    begin
-      Count := Count - 1;
-      if Count = 0 then
-         Wait_Until_Zero'Requeue;
+      g.mu.Lock;
+      Put_Line("Grid:");
+      Put_Line(" 00 01 02 03 04 05 06 07 08 09");
+      for i in 1..2*g.Width-1 loop
+         if i mod 2 = 0 then
+            Put(i/2, 0);
+         else
+            Put(" ", 0);
+         end if;
+         for j in 1..2*g.Height-1 loop
+            if i mod 2 /= 0 and j mod 2 /= 0 then
+               Put("+", 0);
+            elsif i mod 2 /= 0 then
+               if g.visitedEdges.Find((i+1)/2, j/2)(2) or g.visitedEdges.Find((i-1)/2, j/2)(1) then
+                  Put("==", 0);
+               else
+                  Put("--", 0);
+               end if;
+            elsif j mod 2 /= 0 then
+               if g.visitedEdges.Find(i/2, (j+1)/2)(4) or g.visitedEdges.Find(i/2, (j-1)/2)(3) then
+                  Put(";", 0);
+               else
+                  Put("|", 0);
+               end if;
+            else
+               if g.GridMap(i/2, j/2) = 0 then
+                  Put("  ", 0);
+               else
+                  Put(g.GridMap(i/2, j/2), 2);
+               end if;
+            end if;
+         end loop;
+         New_Line;
+      end loop;
+      for i in 1..g.Height loop
+         for j in 1..g.Width loop
+            g.visitedEdges.Replace((i, j), (others => False));
+         end loop;
+      end loop;
+      g.mu.Unlock;
+   end TakePhoto;
+
+   -- Create a new grid
+   g: aliased Grid := (
+      Width => 10,
+      Height => 10,
+      Travelers => Vector(1..10),
+      GridMap => (others => (others => 0)),
+      visitedEdges => (others => (others => False)),
+      mu => System.Task_Primitives.Mutex
+   );
+
+begin
+   -- Add 10 travelers to the grid
+   for i in 1..10 loop
+      AddTraveler(g'Access);
+      delay Duration(Rand(0, 10));
+      if g.Width * g.Height = g.Travelers.Length then
+         exit;
       end if;
-   end Decrement;
-
-   entry Wait_Until_Zero when Count = 0 is
-   begin
-      null;
-   end Wait_Until_Zero;
-end Task_Counter;
-
-Task_Count : Task_Counter;
-
-task type Traveler_Task is
-   entry Start(T : in out Traveler);
-end Traveler_Task;
-
-task body Traveler_Task is
-   T : Traveler;
-begin
-   accept Start(T : in out Traveler) do
-      Task_Count.Increment;
-      loop
-         Move_Traveler(T);
-         delay 1.0;
-      end loop;
-      Task_Count.Decrement;
-   end Start;
-end Traveler_Task;
-
-task type Photo_Task is
-   entry Start;
-end Photo_Task;
-
-task body Photo_Task is
-begin
-   accept Start do
-      Task_Count.Increment;
-      loop
-         Take_Photo;
-         delay 1.0;
-      end loop;
-      Task_Count.Decrement;
-   end Start;
-end Photo_Task;
-
-Traveler_Tasks : array (1 .. 5) of Traveler_Task;
-Photo_T : Photo_Task;
-
-begin
-   Reset(Gen);
-   for I in Travelers'Range loop
-      Travelers(I).ID := I;
-      Travelers(I).Pos := (X => Integer(Random(Gen) * 10.0) + 1, Y => Integer(Random(Gen) * 10.0) + 1);
-      Add_Traveler(Travelers(I));
-      Traveler_Tasks(I).Start(Travelers(I));
    end loop;
 
-   Photo_T.Start;
+   -- Take a photo of the grid
+   TakePhoto(g'Access);
 
-   -- Wait for all tasks to finish
-   Task_Count.Wait_Until_Zero;
+   -- Continuously take photos of the grid every 5 seconds
+   loop
+      delay 5.0;
+      TakePhoto(g'Access);
+   end loop;
 end Main;

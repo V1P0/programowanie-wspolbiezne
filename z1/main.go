@@ -65,7 +65,6 @@ func (g *Grid) AddTraveler() {
 }
 
 func (g *Grid) TakePhoto() {
-    // Print grid
     g.mu.Lock()
     fmt.Println("Grid:")
     fmt.Println(" 00 01 02 03 04 05 06 07 08 09")
@@ -109,7 +108,6 @@ func (g *Grid) TakePhoto() {
 }
 
 func main() {
-    // Initialize grid
     g := &Grid{
         Width:  10,
         Height: 10,
@@ -120,7 +118,6 @@ func main() {
         g.GridMap[i] = make([]int, 10)
     }
 
-    // Generate random travelers
     rand.Seed(time.Now().UnixNano())
 
 
@@ -134,11 +131,8 @@ func main() {
 		}
 	}()
 
-
-    // Take initial snapshot
     g.TakePhoto()
 
-    // Loop: take snapshot at intervals
     for {
         time.Sleep(5 * time.Second)
         g.TakePhoto()
