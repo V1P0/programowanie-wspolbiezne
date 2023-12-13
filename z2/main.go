@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// moves (0, 1) - down (0, -1) - up ...
 var possibleMoves = [4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
 
 type GridObject struct {
@@ -59,7 +58,6 @@ func (g *Grid) runWild(w *GridObject) {
 		time.Sleep(time.Millisecond)
 	}
 }
-
 func (g *Grid) moveWild(w *GridObject, diffPos [2]int) {
 	w.moving = true
 	moved := false
@@ -95,7 +93,6 @@ func (g *Grid) moveWild(w *GridObject, diffPos [2]int) {
 		w.moving = false
 	}
 }
-
 func (g *Grid) runDanger(d *GridObject) {
 	creationTime := time.Now()
 	for {
@@ -110,7 +107,6 @@ func (g *Grid) runDanger(d *GridObject) {
 		time.Sleep(time.Millisecond)
 	}
 }
-
 func (g *Grid) runTraveler(t *GridObject) {
 	for {
 		if t.isToBeRemoved {
@@ -141,7 +137,6 @@ func (g *Grid) runTraveler(t *GridObject) {
 		time.Sleep(time.Millisecond)
 	}
 }
-
 func (g *Grid) runNode(n *Node) {
 	for {
 		if n.currentTraveler == nil {

@@ -28,28 +28,28 @@ type Monitor struct {
 	cond  *sync.Cond
 }
 
-func newMonitor() *Monitor {
+func NewMonitor() *Monitor {
 	m := &Monitor{}
 	m.cond = sync.NewCond(&m.mutex)
 	return m
 }
 
-func (m *Monitor) enter() {
+func (m *Monitor) Enter() {
 	m.mutex.Lock()
 }
 
-func (m *Monitor) exit() {
+func (m *Monitor) Exit() {
 	m.mutex.Unlock()
 }
 
-func (m *Monitor) wait() {
+func (m *Monitor) Wait() {
 	m.cond.Wait()
 }
 
-func (m *Monitor) signal() {
+func (m *Monitor) Signal() {
 	m.cond.Signal()
 }
 
-func (m *Monitor) broadcast() {
+func (m *Monitor) Broadcast() {
 	m.cond.Broadcast()
 }
